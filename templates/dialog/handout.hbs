@@ -10,6 +10,19 @@
         </div>
     </div>
 
+    <div class="form-group">
+        <label for="ib-handout-case">{{localize "INVESTIGATION_BOARD.HandoutCaseLabel"}}</label>
+        <div class="form-fields">
+            <select id="ib-handout-case" name="caseId">
+                <option value="">{{localize "INVESTIGATION_BOARD.HandoutEveryCase"}}</option>
+                {{#each cases}}
+                    <option value="{{this.value}}" {{#if this.selected}}selected{{/if}}>{{this.label}}</option>
+                {{/each}}
+            </select>
+        </div>
+        <p class="hint">{{localize "INVESTIGATION_BOARD.HandoutCaseHint"}}</p>
+    </div>
+
     <fieldset class="ib-kind-picker">
         <legend>{{localize "INVESTIGATION_BOARD.HandoutKindLabel"}}</legend>
         <div class="ib-kind-grid">

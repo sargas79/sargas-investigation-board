@@ -26,6 +26,7 @@ import {
 import {canCreateDirectly, createCase} from "../data/case-create.mjs";
 import {inCasesFolder} from "../data/folders.mjs";
 import {canManageSharing} from "../data/sharing.mjs";
+import {canChangeNote, findNote, withNoteText, withoutNote} from "../data/notes.mjs";
 import {buildImport, exportCase, exportFilename, validateExport} from "../data/transfer.mjs";
 import {announce, clearPresence, holderOf, watchPresence} from "../presence.mjs";
 import {
@@ -103,6 +104,8 @@ export default class InvestigationBoard extends HandlebarsApplicationMixin(Appli
       deleteClue: InvestigationBoard.#onDeleteClue,
       linkFromSelected: InvestigationBoard.#onLinkFromSelected,
       addNote: InvestigationBoard.#onAddNote,
+      editNote: InvestigationBoard.#onEditNote,
+      deleteNote: InvestigationBoard.#onDeleteNote,
       reassignAuthor: InvestigationBoard.#onReassignAuthor,
       openLinked: InvestigationBoard.#onOpenLinked,
       goToClue: InvestigationBoard.#onGoToClue,
@@ -382,7 +385,11 @@ export default class InvestigationBoard extends HandlebarsApplicationMixin(Appli
         authorHistory: (page.system.authorHistory ?? []).map(entry => this.#reassignedLine(entry)),
         notes: (page.system.notes ?? []).map(note => ({
           text: note.text,
-          byline: this.#noteByline(note)
+          byline: this.#noteByline(note),
+          author: note.author,
+          time: note.time,
+          // #83: written back through the page, so owning it is needed as well as the note being theirs.
+          canChange: page.isOwner && canChangeNote(note)
         })),
         stamps: rulesEnabled() ? (page.system.deductions ?? []).map(t => DEDUCTION_RULES[t]?.label ?? t) : []
       },
@@ -488,7 +495,8 @@ export default class InvestigationBoard extends HandlebarsApplicationMixin(Appli
     catch {
       when = null;
     }
-    return when ? `${who} — ${when}` : who;
+    const byline = when ? `${who} — ${when}` : who;
+    return note.edited ? `${byline} · ${game.i18n.localize("INVESTIGATION_BOARD.NoteEdited")}` : byline;
   }
 
   /* -------------------------------------------- */
@@ -562,11 +570,14 @@ export default class InvestigationBoard extends HandlebarsApplicationMixin(Appli
    * There is no permission filtering here and there must not be: an unshared handout is a document
    * a player's client was never sent, so `getHandouts()` already answers "what am I holding". The
    * only thing that differs by role is which controls sit beside each row.
+   *
+   * #84: what it does narrow by is the case — only the open case's documents are listed, and with
+   * no case open, all of them.
    * @returns {object}
    */
   #handoutContext() {
     const manage = canManageHandouts();
-    const handouts = getHandouts().map(journal => {
+    const handouts = getHandouts(this.currentCase).map(journal => {
       const page = handoutPage(journal);
       const config = HANDOUT_KINDS[page?.system.kind] ?? HANDOUT_KINDS.document;
       const kindLabel = game.i18n.localize(config.label);
@@ -592,6 +603,9 @@ export default class InvestigationBoard extends HandlebarsApplicationMixin(Appli
       documentsTab: this.#sidebarTab === "documents",
       handouts,
       handoutCount: handouts.length,
+      // An empty list under a case says "none for this case" only when there are documents
+      // elsewhere; otherwise the GM's how-to and the player's "nothing yet" still say it better.
+      handoutsElsewhere: !handouts.length && !!this.currentCase && (getHandouts().length > 0),
       canManageHandouts: manage,
       canPin,
       // A player with no case open has no control to put in the row's overlay, and an empty one
@@ -954,6 +968,21 @@ export default class InvestigationBoard extends HandlebarsApplicationMixin(Appli
   /* -------------------------------------------- */
 
   /**
+   * Whether a clue change is a document's card being pinned, unpinned or re-pointed.
+   * @param {JournalEntryPage} page
+   * @param {"upsert"|"delete"} action
+   * @param {object} [changes]   The update's changes; absent on a create.
+   * @returns {boolean}
+   */
+  #isHandoutCard(page, action, changes) {
+    const relinked = (action === "delete") || !changes || ("linkedUuid" in (changes.system ?? {}));
+    const uuid = page.system.linkedUuid;
+    return relinked && !!uuid?.startsWith("JournalEntry.") && isHandout(fromUuidSync(uuid));
+  }
+
+  /* -------------------------------------------- */
+
+  /**
    * Apply a page change to the board without a full re-render, so a drag in progress and the
    * current selection both survive another player's edit.
    * @param {JournalEntryPage} page
@@ -962,7 +991,15 @@ export default class InvestigationBoard extends HandlebarsApplicationMixin(Appli
    * @returns {Promise<void>}
    */
   async onPageChange(page, action, changes) {
-    if ( !this.rendered || (page.parent?.id !== this.#caseId) || !this.#renderer ) return;
+    if ( !this.rendered ) return;
+    // #84: pinning a document to any case, or deleting its card, can change which cases list it —
+    // an unfiled document leaves every other case's list once it is pinned to one. Moving the card
+    // does not, so a drag never redraws the sidebar.
+    const repinned = (page.type === PAGE_TYPES.CLUE) && this.#isHandoutCard(page, action, changes);
+    if ( (page.parent?.id !== this.#caseId) || !this.#renderer ) {
+      if ( repinned ) await this.render({parts: ["sidebar"]});
+      return;
+    }
     if ( page.type === PAGE_TYPES.CLUE ) {
       if ( action === "delete" ) {
         this.#renderer.removeClue(page.id);
@@ -976,7 +1013,9 @@ export default class InvestigationBoard extends HandlebarsApplicationMixin(Appli
       // stamping the clue someone has selected changes their inspector too; only then, so another
       // player's edit never re-renders a panel mid-typing.
       const stamped = (page.id === this.#selectedClue) && ("deductions" in (changes?.system ?? {}));
-      await this.render({parts: stamped ? ["tray", "toolbar", "inspector"] : ["tray", "toolbar"]});
+      const parts = stamped ? ["tray", "toolbar", "inspector"] : ["tray", "toolbar"];
+      if ( repinned ) parts.push("sidebar");
+      await this.render({parts});
     }
     else if ( page.type === PAGE_TYPES.CONNECTION ) {
       if ( action === "delete" ) this.#renderer.removeConnection(page.id);
@@ -1424,7 +1463,7 @@ export default class InvestigationBoard extends HandlebarsApplicationMixin(Appli
       ui.notifications.warn("INVESTIGATION_BOARD.NOTIFY.HandoutIsGMOnly", {localize: true});
       return;
     }
-    HandoutDialog.create();
+    HandoutDialog.create(this.currentCase?.id ?? null);
   }
 
   /* -------------------------------------------- */
@@ -1729,6 +1768,40 @@ export default class InvestigationBoard extends HandlebarsApplicationMixin(Appli
   /* -------------------------------------------- */
 
   /**
+   * The window a note is written or rewritten in.
+   *
+   * #82: not modal, so the rest of Foundry stays usable while it is open — a note is often copied
+   * out of a journal, the chat or a sheet. That makes a second click possible while the first
+   * window is still open, so each id gets one window, raised rather than duplicated.
+   *
+   * @param {object} options
+   * @param {string} options.id          One per clue for a new note, one per note for an edit.
+   * @param {string} options.title       Already localized.
+   * @param {string} [options.text]      The note as it stands, when rewriting one.
+   * @param {object} options.ok          The confirm button's label and icon.
+   * @returns {Promise<string|null|undefined>}   The trimmed text; null when closed; undefined when
+   *                                             a window already open was raised instead.
+   */
+  static async #notePrompt({id, title, text = "", ok}) {
+    const open = foundry.applications.instances.get(id);
+    if ( open ) {
+      open.bringToFront();
+      return undefined;
+    }
+    const placeholder = game.i18n.localize("INVESTIGATION_BOARD.NotePlaceholder");
+    return foundry.applications.api.DialogV2.prompt({
+      id,
+      window: {title},
+      content: `<div class="form-group stacked"><textarea name="note" rows="4" autofocus
+                  placeholder="${placeholder}">${foundry.utils.escapeHTML(text)}</textarea></div>`,
+      ok: {...ok, callback: (_event, button) => button.form.elements.note.value.trim()},
+      rejectClose: false
+    });
+  }
+
+  /* -------------------------------------------- */
+
+  /**
    * Add a dated note to the selected clue — the running commentary a case accumulates.
    * @this {InvestigationBoard}
    * @returns {Promise<void>}
@@ -1737,19 +1810,14 @@ export default class InvestigationBoard extends HandlebarsApplicationMixin(Appli
     const page = this.currentCase?.pages.get(this.#selectedClue);
     if ( !page?.isOwner ) return;
 
-    const text = await foundry.applications.api.DialogV2.prompt({
-      window: {title: "INVESTIGATION_BOARD.AddNote"},
-      content: `<div class="form-group stacked"><textarea name="note" rows="4" autofocus
-                  placeholder="${game.i18n.localize("INVESTIGATION_BOARD.NotePlaceholder")}"></textarea></div>`,
-      ok: {
-        label: "INVESTIGATION_BOARD.AddNote",
-        icon: "fa-solid fa-plus",
-        callback: (_event, button) => button.form.elements.note.value.trim()
-      },
-      modal: true,
-      rejectClose: false
+    const text = await InvestigationBoard.#notePrompt({
+      id: `investigation-board-add-note-${page.id}`,
+      title: `${game.i18n.localize("INVESTIGATION_BOARD.AddNote")}: ${page.name}`,
+      ok: {label: "INVESTIGATION_BOARD.AddNote", icon: "fa-solid fa-plus"}
     });
-    if ( !text ) return;
+    // The board stayed live while the window was open: the clue may have been deleted since. One
+    // set aside meanwhile still takes the note — it is in the tray, not gone.
+    if ( !text || !page.parent?.pages.has(page.id) ) return;
 
     // Appended to a copy: writing the whole array back is how an ArrayField takes an addition.
     await page.update({
@@ -1757,6 +1825,71 @@ export default class InvestigationBoard extends HandlebarsApplicationMixin(Appli
         notes: [...page.system.notes, {author: game.user.id, text, time: Date.now()}]
       }
     });
+    await this.render({parts: ["inspector"]});
+  }
+
+  /* -------------------------------------------- */
+
+  /**
+   * Rewrite a note on the selected clue: a player their own, the GM anyone's.
+   * @this {InvestigationBoard}
+   * @param {PointerEvent} _event
+   * @param {HTMLElement} target
+   * @returns {Promise<void>}
+   */
+  static async #onEditNote(_event, target) {
+    const page = this.currentCase?.pages.get(this.#selectedClue);
+    const key = {author: target.dataset.noteAuthor, time: Number(target.dataset.noteTime)};
+    const note = findNote(page?.system.notes, key);
+    if ( !page?.isOwner || !note || !canChangeNote(note) ) return;
+
+    const text = await InvestigationBoard.#notePrompt({
+      id: `investigation-board-edit-note-${page.id}-${note.author}-${note.time}`,
+      title: `${game.i18n.localize("INVESTIGATION_BOARD.EditNote")}: ${page.name}`,
+      text: note.text,
+      ok: {label: "INVESTIGATION_BOARD.Save", icon: "fa-solid fa-check"}
+    });
+    // Emptying a note is not how it is deleted: that has its own control and its own confirmation,
+    // so say so rather than closing as though it had saved.
+    if ( text === "" ) {
+      ui.notifications.info("INVESTIGATION_BOARD.NOTIFY.NoteEmptied", {localize: true});
+      return;
+    }
+    if ( !text || !page.parent?.pages.has(page.id) ) return;
+
+    // Rewritten in the notes as they are now: others may have changed while the prompt was open.
+    const notes = withNoteText(page.system.notes, key, text);
+    if ( !notes ) return;
+    await page.update({system: {notes}});
+    await this.render({parts: ["inspector"]});
+  }
+
+  /* -------------------------------------------- */
+
+  /**
+   * Delete a note from the selected clue: a player their own, the GM anyone's.
+   * @this {InvestigationBoard}
+   * @param {PointerEvent} _event
+   * @param {HTMLElement} target
+   * @returns {Promise<void>}
+   */
+  static async #onDeleteNote(_event, target) {
+    const page = this.currentCase?.pages.get(this.#selectedClue);
+    const note = {author: target.dataset.noteAuthor, time: Number(target.dataset.noteTime)};
+    if ( !page?.isOwner || !canChangeNote(note) ) return;
+
+    const confirmed = await foundry.applications.api.DialogV2.confirm({
+      window: {title: "INVESTIGATION_BOARD.DeleteNote"},
+      content: `<p>${game.i18n.localize("INVESTIGATION_BOARD.DeleteNoteConfirm")}</p>`,
+      modal: true
+    });
+    if ( !confirmed ) return;
+
+    // Filtered from the notes as they are now, not as they were drawn: another note may have been
+    // added or deleted while the confirmation was up.
+    const notes = withoutNote(page.system.notes, note);
+    if ( !notes ) return;
+    await page.update({system: {notes}});
     await this.render({parts: ["inspector"]});
   }
 

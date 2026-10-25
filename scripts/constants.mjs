@@ -46,7 +46,9 @@ export const CASE_FLAGS = {
 /** Flag keys written on a handout's own JournalEntry. */
 export const HANDOUT_FLAGS = {
   /** Marks the entry as a handout rather than an ordinary journal or a case. */
-  IS_HANDOUT: "isHandout"
+  IS_HANDOUT: "isHandout",
+  /** The id of the case the handout was written for. Absent on handouts older than #84. */
+  CASE_ID: "caseId"
 };
 
 /** Flag keys written on a Folder. */

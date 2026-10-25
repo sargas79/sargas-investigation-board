@@ -88,7 +88,9 @@ export default class ClueData extends foundry.abstract.TypeDataModel {
       notes: new fields.ArrayField(new fields.SchemaField({
         author: new fields.StringField({required: true, blank: false}),
         text: new fields.StringField({required: true, blank: true, initial: ""}),
-        time: new fields.NumberField({required: true, integer: true, nullable: false, initial: 0})
+        time: new fields.NumberField({required: true, integer: true, nullable: false, initial: 0}),
+        // When the note was last rewritten (#83); null for one never edited.
+        edited: new fields.NumberField({required: false, integer: true, nullable: true, initial: null})
       })),
 
       // --- Deduction stamp (GURPS Monster Hunters) --------------------------

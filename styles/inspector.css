@@ -167,6 +167,7 @@
 /* --- Notes --------------------------------------------------------------- */
 
 .investigation-board-app .ib-note {
+  position: relative;
   padding: 7px 9px;
   margin-bottom: 5px;
   border-left: 2px solid var(--ib-border);
@@ -191,6 +192,32 @@
   margin: 4px 0 0;
   font-size: 9.5px;
   color: var(--ib-text-muted);
+}
+
+/* Revealed like the connection rows' cut control, so a list of notes is not a list of controls. */
+.investigation-board-app .ib-note-actions {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  gap: 3px;
+  opacity: 0;
+}
+
+.investigation-board-app .ib-note-actions .ib-icon-button {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.investigation-board-app .ib-note:hover .ib-note-actions,
+.investigation-board-app .ib-note-actions:focus-within {
+  opacity: 1;
+}
+
+.investigation-board-app .ib-note:has(.ib-note-actions) .ib-note-text {
+  padding-right: 44px;
 }
 
 .investigation-board-app .ib-inspector-footer {

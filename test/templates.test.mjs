@@ -449,6 +449,19 @@ export default async function testTemplates() {
     assert(/value="where" checked/.test(gm), "the clue's current stamp is not ticked");
   });
 
+  // #83: each note carries its own permission, so the controls are per note, not per clue.
+  await check("a note's edit and delete controls appear only on notes the user may change", () => {
+    const context = inspectorContext();
+    context.clue.notes = [
+      {text: "Mine", byline: "Mara", author: "p1", time: 100, canChange: true},
+      {text: "Theirs", byline: "Silas", author: "p2", time: 200, canChange: false}
+    ];
+    const html = render("templates/inspector.hbs", context);
+    assert(countAction(html, "editNote") === 1 && countAction(html, "deleteNote") === 1,
+      "the note controls are not limited to the changeable note");
+    assert(/data-note-author="p1" data-note-time="100"/.test(html), "the controls do not name their note");
+  });
+
   describe("deduction-tracker.hbs");
 
   const trackerContext = tab => ({
