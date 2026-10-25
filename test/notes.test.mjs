@@ -94,13 +94,6 @@ export default async function testNotes() {
       "the edit control is not gated on canChange");
   });
 
-  await check("the Edit Note prompt does not lock the rest of Foundry either", () => {
-    const start = app.indexOf("static async #onEditNote(");
-    const body = app.slice(start, app.indexOf("static async", start + 1));
-    assert(start !== -1, "#onEditNote not found");
-    assert(!/modal:\s*true/.test(body), "the Edit Note prompt is modal");
-    assert(/escapeHTML/.test(body), "the note's text is put into the prompt unescaped");
-  });
 
   await check("the inspector offers a delete control, gated per note", () => {
     assert(app.includes("deleteNote: InvestigationBoard.#onDeleteNote"), "no deleteNote action is registered");
@@ -112,12 +105,22 @@ export default async function testNotes() {
   });
 
   // #82: a note is often copied out of a journal or the chat, which a modal prompt forbids.
-  await check("the Add Note prompt does not lock the rest of Foundry", () => {
-    const start = app.indexOf("static async #onAddNote()");
-    const end = app.indexOf("static async", start + 1);
-    const body = app.slice(start, end);
-    assert(start !== -1, "#onAddNote not found");
-    assert(!/modal:\s*true/.test(body), "the Add Note prompt is still modal");
-    assert(/bringToFront/.test(body), "a second click opens a duplicate prompt instead of raising the first");
+  /** The source of one static async method, up to the next. */
+  const method = name => {
+    const start = app.indexOf(`static async ${name}(`);
+    assert(start !== -1, `${name} not found`);
+    return app.slice(start, app.indexOf("static async", start + 1));
+  };
+
+  await check("the note window does not lock the rest of Foundry", () => {
+    const prompt = method("#notePrompt");
+    assert(!/modal:\s*true/.test(prompt), "the note window is modal");
+    assert(/bringToFront/.test(prompt), "a second click opens a duplicate window instead of raising the first");
+    assert(/escapeHTML/.test(prompt), "a note's text is put into the window unescaped");
+  });
+
+  await check("adding and editing a note both use that window", () => {
+    assert(/#notePrompt\(/.test(method("#onAddNote")), "Add Note does not use the note window");
+    assert(/#notePrompt\(/.test(method("#onEditNote")), "Edit Note does not use the note window");
   });
 }

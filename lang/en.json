@@ -86,6 +86,7 @@
   "INVESTIGATION_BOARD.Pin": "Pin It",
   "INVESTIGATION_BOARD.Save": "Save",
   "INVESTIGATION_BOARD.NOTIFY.NoPermission": "You do not have permission to change this case.",
+  "INVESTIGATION_BOARD.NOTIFY.NoteEmptied": "The note was left as it was. To remove it, use the bin beside it.",
   "INVESTIGATION_BOARD.NOTIFY.DropUnresolved": "That could not be pinned — the document was not found.",
   "INVESTIGATION_BOARD.NOTIFY.DropIsClue": "That is already a clue. Drag it on the board to move it.",
   "INVESTIGATION_BOARD.NOTIFY.LinkBroken": "The document this clue points at no longer exists.",

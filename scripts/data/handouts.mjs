@@ -83,9 +83,10 @@ export function handoutPage(journal) {
 export function getHandouts(caseJournal = null) {
   // Read once rather than per handout: deciding where an unassigned one belongs looks at them all.
   const cases = caseJournal ? getCases({includeArchived: true}) : [];
+  const pins = new Map();
   return game.journal
     .filter(j => isHandout(j) && j.visible)
-    .filter(j => !caseJournal || belongsToCase(j, caseJournal, cases))
+    .filter(j => !caseJournal || belongsToCase(j, caseJournal, cases, pins))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -106,11 +107,21 @@ export function handoutCaseId(journal) {
  * Whether a case has a card pinned from this handout, set aside or not.
  * @param {JournalEntry} journal
  * @param {JournalEntry} caseJournal
+ * @param {Map<JournalEntry, Set<string>>} [pins]   Each case's pinned links, filled as it is read,
+ *                                                  so a list of handouts walks each case once.
  * @returns {boolean}
  */
-export function isPinnedIn(journal, caseJournal) {
-  return !!caseJournal?.pages.some(p =>
-    (p.type === PAGE_TYPES.CLUE) && (p.system.linkedUuid === journal.uuid));
+export function isPinnedIn(journal, caseJournal, pins = new Map()) {
+  if ( !caseJournal ) return false;
+  let linked = pins.get(caseJournal);
+  if ( !linked ) {
+    linked = new Set();
+    for ( const p of caseJournal.pages ) {
+      if ( (p.type === PAGE_TYPES.CLUE) && p.system.linkedUuid ) linked.add(p.system.linkedUuid);
+    }
+    pins.set(caseJournal, linked);
+  }
+  return linked.has(journal.uuid);
 }
 
 /* -------------------------------------------- */
@@ -127,13 +138,15 @@ export function isPinnedIn(journal, caseJournal) {
  * @param {JournalEntry} journal
  * @param {JournalEntry} caseJournal
  * @param {JournalEntry[]} [cases]     Every case, to place an unassigned handout by its pins.
+ * @param {Map<JournalEntry, Set<string>>} [pins]   Shared across a list; see `isPinnedIn`.
  * @returns {boolean}
  */
-export function belongsToCase(journal, caseJournal, cases = getCases({includeArchived: true})) {
-  if ( isPinnedIn(journal, caseJournal) ) return true;
+export function belongsToCase(journal, caseJournal, cases = getCases({includeArchived: true}),
+  pins = new Map()) {
+  if ( isPinnedIn(journal, caseJournal, pins) ) return true;
   const assigned = handoutCaseId(journal);
   if ( assigned && cases.some(c => c.id === assigned) ) return assigned === caseJournal.id;
-  return !cases.some(c => isPinnedIn(journal, c));
+  return !cases.some(c => isPinnedIn(journal, c, pins));
 }
 
 /* -------------------------------------------- */

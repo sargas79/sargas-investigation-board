@@ -37,6 +37,18 @@ function indexOfNote(notes, {author, time}) {
 /* -------------------------------------------- */
 
 /**
+ * A note, by author and time.
+ * @param {{author: string, time: number}[]} notes
+ * @param {{author: string, time: number}} target
+ * @returns {object|undefined}
+ */
+export function findNote(notes, target) {
+  return notes?.[indexOfNote(notes, target)];
+}
+
+/* -------------------------------------------- */
+
+/**
  * The notes with one taken out.
  *
  * Returns null when the note is no longer there — already deleted elsewhere — so the caller can
