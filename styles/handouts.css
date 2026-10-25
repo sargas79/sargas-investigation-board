@@ -371,6 +371,25 @@
 
 /* --- The writing form ----------------------------------------------------- */
 
+/* The window has a fixed height (see HandoutDialog), so the form scrolls and the Save bar stays. */
+.ib-handout-dialog .window-content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ib-handout-dialog .ib-handout-form {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.ib-handout-dialog .window-content > .form-footer {
+  flex: 0 0 auto;
+  padding-top: 8px;
+}
+
 .ib-handout-dialog .ib-kind-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

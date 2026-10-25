@@ -59,6 +59,20 @@ export default class HandoutDialog extends HandlebarsApplicationMixin(Applicatio
     this.#rows = page ? page.system.rows.map(row => ({...row})) : seedRows(this.#kind);
   }
 
+  /**
+   * Open at a height that fits the screen, with the form scrolling inside it.
+   *
+   * An "auto" height is never clamped by Foundry, and this form is taller than many screens — the
+   * text editor grows after the window is placed — which put the Save button below the bottom
+   * edge with no way to reach it. A fixed height keeps the footer on screen; it is still resizable.
+   * @inheritDoc
+   */
+  _initializeApplicationOptions(options) {
+    options = super._initializeApplicationOptions(options);
+    options.position.height = Math.min(880, window.innerHeight - 40);
+    return options;
+  }
+
   /** The kind currently chosen, tracked here so the form re-lays-out without a round-trip. */
   #kind;
 
