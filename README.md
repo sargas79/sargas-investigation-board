@@ -49,6 +49,11 @@ character mid-campaign doesn't silently rewrite who found what.
 
 **Jot a lead** with Create Lead — one click drops a sticky note with the caret already in it.
 
+**Annotate a clue** with *Add note* in the inspector. The note window doesn't lock the rest of
+Foundry, so you can copy from a journal, the chat or a sheet and paste straight in. Hover a note to
+edit or delete it: players change their own notes, the GM anyone's. An edited note says so in its
+byline.
+
 **String clues together** with the Draw Connection tool (click one clue, then another; it stays on
 so you can tie several in a row) or by dragging straight from a clue's pushpin. **Hand**, the first
 tool in the bar, puts whatever is in use back down: it drops the linking tool, abandons a
@@ -107,6 +112,12 @@ document also takes an issuing authority, a reference number, a dateline written
 in the fiction, a picture, and a block of text. On the kinds that describe a person the picture is
 shown as a photograph beside the details; on the rest it is a full-width scan of the paper.
 
+**One case at a time.** The Documents tab lists the open case's documents only. A new document is
+filed under the case open when it was written; change that with *Case* in the document's editor, or
+choose *Every case*. A document also appears under any case it has been pinned to. Documents written
+before 1.5.0 have no case recorded: they appear under the cases they are pinned to, or under every
+case if they are pinned nowhere.
+
 **A document you have written is yours alone.** It does not appear for any player, anywhere, until
 you hand it over — not greyed out, not hidden behind a permission check: their client is never sent
 it at all. See *Permissions* below for why that distinction matters.
@@ -155,6 +166,7 @@ a case or lock out the only people who could repair it.
 | Share an existing case | **GM or Assistant GM** |
 | Write, edit, hand over or delete a document | **GM or Assistant GM** |
 | Read a document, and pin it to a case | Whoever it has been **handed to** |
+| Edit or delete a note on a clue | Its **author** (with **Owner** on the case), or the **GM** |
 | Change which character a clue is credited to | **GM or Assistant GM**, from the pencil beside the clue's byline in the inspector. Each change is listed there with the previous name |
 | Delete a clue permanently | **GM only**, from the Discarded tray — players set aside instead |
 | Delete a case permanently | **GM only**, from the header or the sidebar — players close instead |

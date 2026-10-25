@@ -8,7 +8,7 @@ import {
 } from "../constants.mjs";
 import {authorStamp} from "./authorship.mjs";
 import {inCasesFolder} from "./folders.mjs";
-import {freeSpotNear, topZ} from "./case.mjs";
+import {freeSpotNear, getCases, topZ} from "./case.mjs";
 
 /**
  * Handouts: documents the GM writes in advance and hands over when the moment comes.
@@ -80,10 +80,60 @@ export function handoutPage(journal) {
  *
  * @returns {JournalEntry[]}
  */
-export function getHandouts() {
+export function getHandouts(caseJournal = null) {
+  // Read once rather than per handout: deciding where an unassigned one belongs looks at them all.
+  const cases = caseJournal ? getCases({includeArchived: true}) : [];
   return game.journal
     .filter(j => isHandout(j) && j.visible)
+    .filter(j => !caseJournal || belongsToCase(j, caseJournal, cases))
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/* -------------------------------------------- */
+
+/**
+ * The id of the case a handout was written for, or null.
+ * @param {JournalEntry} journal
+ * @returns {string|null}
+ */
+export function handoutCaseId(journal) {
+  return journal?.getFlag(MODULE_ID, HANDOUT_FLAGS.CASE_ID) || null;
+}
+
+/* -------------------------------------------- */
+
+/**
+ * Whether a case has a card pinned from this handout, set aside or not.
+ * @param {JournalEntry} journal
+ * @param {JournalEntry} caseJournal
+ * @returns {boolean}
+ */
+export function isPinnedIn(journal, caseJournal) {
+  return !!caseJournal?.pages.some(p =>
+    (p.type === PAGE_TYPES.CLUE) && (p.system.linkedUuid === journal.uuid));
+}
+
+/* -------------------------------------------- */
+
+/**
+ * Whether a handout belongs in a case's documents list (#84).
+ *
+ * The case it was written for, and any case it has been pinned to — a document pinned to a second
+ * investigation is evidence there too. A handout written before handouts recorded a case is placed
+ * by where it has been pinned, and one pinned nowhere shows under every case: hiding it would leave
+ * a document nobody could find again. For the same reason a handout filed under a case that is gone
+ * — deleted, or one this user cannot see — is treated as unassigned.
+ *
+ * @param {JournalEntry} journal
+ * @param {JournalEntry} caseJournal
+ * @param {JournalEntry[]} [cases]     Every case, to place an unassigned handout by its pins.
+ * @returns {boolean}
+ */
+export function belongsToCase(journal, caseJournal, cases = getCases({includeArchived: true})) {
+  if ( isPinnedIn(journal, caseJournal) ) return true;
+  const assigned = handoutCaseId(journal);
+  if ( assigned && cases.some(c => c.id === assigned) ) return assigned === caseJournal.id;
+  return !cases.some(c => isPinnedIn(journal, c));
 }
 
 /* -------------------------------------------- */
@@ -167,9 +217,10 @@ export function currentHolders(journal) {
  * @param {string} data.name               What the document is called in the list.
  * @param {string} [data.kind]             One of `HANDOUT_KINDS`.
  * @param {object} [data.system]           Content for the handout page.
+ * @param {string|null} [data.caseId]      The case it is written for; none shows it under every case.
  * @returns {Promise<JournalEntry|null>}
  */
-export async function createHandout({name, kind = "document", system = {}} = {}) {
+export async function createHandout({name, kind = "document", system = {}, caseId = null} = {}) {
   if ( !canManageHandouts() ) {
     ui.notifications.warn("INVESTIGATION_BOARD.NOTIFY.HandoutIsGMOnly", {localize: true});
     return null;
@@ -181,7 +232,7 @@ export async function createHandout({name, kind = "document", system = {}} = {})
     name: title,
     // The point of the whole feature: nobody has this until the GM says so.
     ownership: {default: CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE},
-    flags: {[MODULE_ID]: {[HANDOUT_FLAGS.IS_HANDOUT]: true}},
+    flags: {[MODULE_ID]: {[HANDOUT_FLAGS.IS_HANDOUT]: true, [HANDOUT_FLAGS.CASE_ID]: caseId || null}},
     pages: [{
       name: title,
       type: PAGE_TYPES.HANDOUT,

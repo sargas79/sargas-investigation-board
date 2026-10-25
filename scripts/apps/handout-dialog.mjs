@@ -1,5 +1,6 @@
-import {HANDOUT_KINDS, MODULE_ID, modulePath} from "../constants.mjs";
-import {createHandout, handoutPage, seedRows} from "../data/handouts.mjs";
+import {HANDOUT_FLAGS, HANDOUT_KINDS, MODULE_ID, modulePath} from "../constants.mjs";
+import {createHandout, handoutCaseId, handoutPage, seedRows} from "../data/handouts.mjs";
+import {getCases} from "../data/case.mjs";
 import {bindLeadsPicker} from "../data/uploads.mjs";
 
 const {ApplicationV2, HandlebarsApplicationMixin} = foundry.applications.api;
@@ -47,10 +48,12 @@ export default class HandoutDialog extends HandlebarsApplicationMixin(Applicatio
   /**
    * @param {object} options
    * @param {JournalEntry} [options.journal]   An existing handout to rewrite.
+   * @param {string|null} [options.caseId]      The case a new one is written for.
    */
-  constructor({journal, ...options} = {}) {
+  constructor({journal, caseId, ...options} = {}) {
     super(options);
     this.journal = journal ?? null;
+    this.#caseId = journal ? handoutCaseId(journal) : (caseId ?? null);
     const page = this.journal ? handoutPage(this.journal) : null;
     this.#kind = page?.system.kind ?? "death";
     this.#rows = page ? page.system.rows.map(row => ({...row})) : seedRows(this.#kind);
@@ -58,6 +61,9 @@ export default class HandoutDialog extends HandlebarsApplicationMixin(Applicatio
 
   /** The kind currently chosen, tracked here so the form re-lays-out without a round-trip. */
   #kind;
+
+  /** The case the document is filed under (#84), until the form says otherwise. */
+  #caseId;
 
   /**
    * The rows as they stand in the form.
@@ -115,6 +121,10 @@ export default class HandoutDialog extends HandlebarsApplicationMixin(Applicatio
         icon: kind.icon,
         selected: value === this.#kind
       })),
+      // Archived cases too: a document filed under one must keep showing which case it is.
+      cases: getCases({includeArchived: true})
+        .map(c => ({value: c.id, label: c.name, selected: c.id === (this.#draft.caseId ?? this.#caseId)}))
+        .sort((a, b) => a.label.localeCompare(b.label)),
       canUpload: game.user.can("FILES_UPLOAD"),
       buttons: [{type: "submit", icon: "fa-solid fa-check", label: "INVESTIGATION_BOARD.Save"}]
     });
@@ -234,27 +244,30 @@ export default class HandoutDialog extends HandlebarsApplicationMixin(Applicatio
       rows
     };
 
+    const caseId = data.caseId || null;
+
     if ( this.isEdit ) {
       const page = handoutPage(this.journal);
       if ( !page ) return;
-      await this.journal.update({name});
+      await this.journal.update({name, [`flags.${MODULE_ID}.${HANDOUT_FLAGS.CASE_ID}`]: caseId});
       // The page carries the name too, so the document reads right when opened from the journal
       // sidebar, where the page's own name is the heading.
       await page.update({name, system});
       return;
     }
 
-    await createHandout({name, kind: this.#kind, system});
+    await createHandout({name, kind: this.#kind, system, caseId});
   }
 
   /* -------------------------------------------- */
 
   /**
    * Write a new document.
+   * @param {string|null} [caseId]   The case it is written for — normally the one open on the board.
    * @returns {Promise<HandoutDialog>}
    */
-  static create() {
-    return new this().render({force: true});
+  static create(caseId = null) {
+    return new this({caseId}).render({force: true});
   }
 
   /* -------------------------------------------- */

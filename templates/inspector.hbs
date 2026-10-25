@@ -160,6 +160,22 @@
                         <article class="ib-note">
                             <p class="ib-note-text">{{this.text}}</p>
                             <p class="ib-note-by">{{this.byline}}</p>
+                            {{#if this.canChange}}
+                                <span class="ib-note-actions">
+                                    <button type="button" class="ib-icon-button" data-action="editNote"
+                                            data-note-author="{{this.author}}" data-note-time="{{this.time}}"
+                                            data-tooltip="INVESTIGATION_BOARD.EditNote"
+                                            aria-label="{{localize 'INVESTIGATION_BOARD.EditNote'}}">
+                                        <i class="fa-solid fa-pen"></i>
+                                    </button>
+                                    <button type="button" class="ib-icon-button ib-danger" data-action="deleteNote"
+                                            data-note-author="{{this.author}}" data-note-time="{{this.time}}"
+                                            data-tooltip="INVESTIGATION_BOARD.DeleteNote"
+                                            aria-label="{{localize 'INVESTIGATION_BOARD.DeleteNote'}}">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                </span>
+                            {{/if}}
                         </article>
                     {{/each}}
                 </section>

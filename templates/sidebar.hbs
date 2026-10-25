@@ -81,7 +81,9 @@
                 </div>
             {{else}}
                 <p class="ib-empty">
-                    {{#if canManageHandouts}}
+                    {{#if handoutsForCase}}
+                        {{localize "INVESTIGATION_BOARD.NoHandoutsForCase"}}
+                    {{else if canManageHandouts}}
                         {{localize "INVESTIGATION_BOARD.NoHandoutsGM"}}
                     {{else}}
                         {{localize "INVESTIGATION_BOARD.NoHandouts"}}

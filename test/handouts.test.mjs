@@ -230,4 +230,55 @@ export default async function testHandouts() {
     assert(handoutClueData({pages: [], name: "x", uuid: "JournalEntry.y"}) === null,
       "a card was built from an entry with nothing on it");
   });
+
+  describe("belongsToCase (#84)");
+
+  const {belongsToCase, handoutCaseId} = await import("../scripts/data/handouts.mjs");
+
+  /** A handout filed under a case, or under none. */
+  const filed = (caseId, uuid = "JournalEntry.h1") => ({
+    uuid,
+    getFlag: (scope, key) => (scope === MODULE_ID && key === "caseId" ? caseId : undefined)
+  });
+  /** A case with cards pinned from the given handouts. */
+  const caseWith = (id, ...pinned) => ({
+    id,
+    pages: pinned.map(uuid => ({type: `${MODULE_ID}.clue`, system: {linkedUuid: uuid}}))
+  });
+
+  await check("a handout is listed under the case it was written for, and no other", () => {
+    const silver = caseWith("silver");
+    const gold = caseWith("gold");
+    assert(handoutCaseId(filed("silver")) === "silver", "the case id was not read back");
+    assert(belongsToCase(filed("silver"), silver, [silver, gold]) === true, "missing from its own case");
+    assert(belongsToCase(filed("silver"), gold, [silver, gold]) === false, "listed under another case");
+  });
+
+  await check("a handout is listed under any case it has been pinned to", () => {
+    const silver = caseWith("silver");
+    const gold = caseWith("gold", "JournalEntry.h1");
+    assert(belongsToCase(filed("silver"), gold, [silver, gold]) === true, "missing from a case it is pinned to");
+  });
+
+  // Older handouts have no case recorded; hiding them would lose them.
+  await check("an unfiled handout follows its pins, or shows everywhere when it has none", () => {
+    const silver = caseWith("silver", "JournalEntry.h1");
+    const gold = caseWith("gold");
+    assert(belongsToCase(filed(null), silver, [silver, gold]) === true, "missing from the case it is pinned to");
+    assert(belongsToCase(filed(null), gold, [silver, gold]) === false, "listed under a case it is not pinned to");
+    const loose = [caseWith("silver"), caseWith("gold")];
+    assert(loose.every(c => belongsToCase(filed(null), c, loose)), "an unpinned, unfiled handout was hidden");
+  });
+
+  await check("a handout filed under a case that is gone is treated as unfiled, not hidden", () => {
+    const loose = [caseWith("silver"), caseWith("gold")];
+    assert(loose.every(c => belongsToCase(filed("deleted"), c, loose)),
+      "a handout filed under a deleted case vanished from every list");
+  });
+
+  await check("a card pinned from some other document does not count", () => {
+    const silver = caseWith("silver", "JournalEntry.other");
+    const gold = caseWith("gold");
+    assert(belongsToCase(filed("gold"), silver, [silver, gold]) === false, "another document's card was matched");
+  });
 }
